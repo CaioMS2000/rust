@@ -1,0 +1,7 @@
+[package]
+name = "git-hub-user-activity"
+version = "0.1.0"
+edition = "2021"  # Corrigido: 2024 não é uma edition válida ainda
+
+[dependencies]
+ureq = "2.9"  # Cliente HTTP síncrono e leve para fazer requisições à API do GitHub
