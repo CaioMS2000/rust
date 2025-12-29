@@ -272,3 +272,142 @@ Por que isso é um erro?
 - Rust precisa saber em **tempo de compilação** qual é o tipo da variável `number`
 - Isso permite que o compilador verifique se o tipo é válido em todos os lugares onde `number` é usado
 - Se o tipo fosse determinado apenas em tempo de execução, o compilador seria mais complexo e daria menos garantias sobre o código
+
+<br/>
+
+# Loops (Repetição)
+
+Rust possui três tipos de loops: `loop`, `while`, e `for`.
+
+## loop - loop infinito
+
+O `loop` executa um bloco de código **para sempre** ou até você explicitamente parar com `break`:
+
+```rust
+loop {
+    println!("again!");
+}
+```
+
+**Controle de fluxo:**
+- `break` - sai do loop
+- `continue` - pula para a próxima iteração
+- **ctrl-c** - interrompe o programa manualmente no terminal
+
+### Retornando valores do loop
+
+Você pode retornar um valor de dentro do `loop` usando `break` com um valor:
+
+```rust
+let mut counter = 0;
+let result = loop {
+    counter += 1;
+    if counter == 10 {
+        break counter * 2; // retorna counter * 2
+    }
+};
+println!("The result is {result}"); // saída: 20
+```
+
+**Importante:** `return` sempre sai da função atual, enquanto `break` sai apenas do loop atual.
+
+### Loop Labels (rótulos de loop)
+
+Quando você tem loops aninhados, pode usar **labels** para especificar qual loop o `break` ou `continue` deve afetar:
+
+```rust
+let mut count = 0;
+'counting_up: loop {
+    println!("count = {count}");
+    let mut remaining = 10;
+
+    loop {
+        println!("remaining = {remaining}");
+        if remaining == 9 {
+            break; // sai apenas do loop interno
+        }
+        if count == 2 {
+            break 'counting_up; // sai do loop externo
+        }
+        remaining -= 1;
+    }
+    count += 1;
+}
+println!("End count = {count}");
+```
+
+**Sintaxe:** Labels devem começar com aspas simples (`'label_name`).
+
+<br/>
+
+## while - loop condicional
+
+O `while` executa enquanto a condição for **verdadeira**:
+
+```rust
+let mut number = 3;
+while number != 0 {
+    println!("{number}!");
+    number -= 1;
+}
+println!("LIFTOFF!!!");
+```
+
+**Vantagem:** Elimina a necessidade de combinar `loop`, `if`, `else` e `break` manualmente.
+
+<br/>
+
+## for - iteração em coleções
+
+O `for` é a forma **mais segura e concisa** de iterar sobre coleções:
+
+```rust
+let a = [10, 20, 30, 40, 50];
+
+for element in a {
+    println!("the value is: {element}");
+}
+```
+
+### Por que `for` é melhor que `while` para iterar arrays?
+
+**Com `while` (não recomendado):**
+```rust
+let a = [10, 20, 30, 40, 50];
+let mut index = 0;
+while index < 5 {
+    println!("the value is: {}", a[index]);
+    index += 1;
+}
+```
+
+**Problemas do `while`:**
+- Propenso a erros (índice incorreto pode causar panic)
+- Mais lento (compilador adiciona verificações de bounds em cada iteração)
+- Se mudar o tamanho do array, precisa ajustar a condição manualmente
+
+**Com `for` (recomendado):**
+- Mais seguro (não há risco de índice fora dos limites)
+- Mais rápido (código de máquina mais eficiente)
+- Mais conciso e legível
+
+### Usando Range com `for`
+
+Para repetir código um número específico de vezes, use **Range**:
+
+```rust
+// Countdown de 3 até 1
+for number in (1..4).rev() {
+    println!("{number}!");
+}
+println!("LIFTOFF!!!");
+```
+
+**Explicação:**
+- `(1..4)` - gera a sequência 1, 2, 3 (não inclui o 4)
+- `.rev()` - reverte a sequência para 3, 2, 1
+
+**Por que usar `for` em vez de `while` para countdown?**
+- Mesmo que você saiba exatamente quantas vezes quer repetir, `for` com Range é mais idiomático em Rust
+- É o que a maioria dos Rustaceans usa
+- Código mais limpo e seguro
