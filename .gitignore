@@ -2,4 +2,5 @@
 .venv
 *.txt
 *.py
-!book_page.txt.txt
+!book_page.txt
+!extract.py
