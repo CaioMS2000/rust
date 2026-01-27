@@ -835,3 +835,541 @@ Slices funcionam com outros tipos também:
 let a = [1, 2, 3, 4, 5];
 let slice = &a[1..3]; // tipo: &[i32], contém [2, 3]
 ```
+
+<br/>
+
+# Structs (Estruturas)
+
+Structs são tipos de dados personalizados que permitem empacotar e nomear múltiplos valores relacionados que formam um grupo significativo. São similares aos atributos de dados de um objeto em linguagens orientadas a objetos.
+
+## Definindo e Instanciando Structs
+
+Structs são similares a tuplas - ambas contêm múltiplos valores relacionados de tipos diferentes. A diferença é que em structs você **nomeia cada dado**, tornando claro o significado dos valores.
+
+### Definindo uma Struct
+
+```rust
+struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+```
+
+- Use a palavra-chave `struct` e nomeie a struct
+- Dentro das chaves, defina os **campos** (fields) com nome e tipo
+- O nome da struct deve descrever o significado dos dados agrupados
+
+### Criando uma Instância
+
+```rust
+fn main() {
+    let user1 = User {
+        active: true,
+        username: String::from("someusername123"),
+        email: String::from("someone@example.com"),
+        sign_in_count: 1,
+    };
+}
+```
+
+- Especifique valores concretos para cada campo usando `chave: valor`
+- **Não precisa** seguir a mesma ordem da definição da struct
+- A definição da struct é como um template, instâncias preenchem com dados específicos
+
+### Acessando e Modificando Campos
+
+Use **notação de ponto** para acessar valores:
+
+```rust
+fn main() {
+    let mut user1 = User {
+        active: true,
+        username: String::from("someusername123"),
+        email: String::from("someone@example.com"),
+        sign_in_count: 1,
+    };
+
+    user1.email = String::from("anotheremail@example.com"); // modificando
+}
+```
+
+**Importante:** A instância **inteira** deve ser mutável. Rust não permite marcar apenas alguns campos como mutáveis.
+
+<br/>
+
+## Field Init Shorthand (Atalho de Inicialização)
+
+Quando o parâmetro tem o mesmo nome do campo da struct, você pode usar a sintaxe abreviada:
+
+**Sem shorthand:**
+```rust
+fn build_user(email: String, username: String) -> User {
+    User {
+        active: true,
+        username: username,
+        email: email,
+        sign_in_count: 1,
+    }
+}
+```
+
+**Com shorthand:**
+```rust
+fn build_user(email: String, username: String) -> User {
+    User {
+        active: true,
+        username,  // mesmo que username: username
+        email,     // mesmo que email: email
+        sign_in_count: 1,
+    }
+}
+```
+
+<br/>
+
+## Struct Update Syntax (Sintaxe de Atualização)
+
+Para criar uma nova instância baseada em outra, use `..`:
+
+**Sem update syntax:**
+```rust
+let user2 = User {
+    active: user1.active,
+    username: user1.username,
+    email: String::from("another@example.com"),
+    sign_in_count: user1.sign_in_count,
+};
+```
+
+**Com update syntax:**
+```rust
+let user2 = User {
+    email: String::from("another@example.com"),
+    ..user1  // preenche o resto com valores de user1
+};
+```
+
+**Regras:**
+- `..user1` deve vir **por último**
+- Funciona como `=` (atribuição), então **move** os dados
+
+**Cuidado com ownership:**
+```rust
+let user2 = User {
+    email: String::from("another@example.com"),
+    ..user1
+};
+// user1 NÃO pode mais ser usado! (username foi movido)
+
+// MAS se tivéssemos dado novos valores para email E username:
+let user2 = User {
+    email: String::from("another@example.com"),
+    username: String::from("anotherusername"),
+    ..user1
+};
+// user1 ainda seria válido (active e sign_in_count implementam Copy)
+```
+
+<br/>
+
+## Tuple Structs (Structs de Tupla)
+
+Structs que parecem tuplas - têm nome mas campos **sem nomes**:
+
+```rust
+struct Color(i32, i32, i32);
+struct Point(i32, i32, i32);
+
+fn main() {
+    let black = Color(0, 0, 0);
+    let origin = Point(0, 0, 0);
+}
+```
+
+**Características:**
+- Cada struct é um **tipo diferente**, mesmo com campos iguais
+- `Color` e `Point` são tipos diferentes (não intercambiáveis)
+- Acesse campos por índice: `origin.0`, `origin.1`, `origin.2`
+- Pode desestruturar: `let Point(x, y, z) = origin;`
+
+**Quando usar:** Quando quer dar nome à tupla e diferenciá-la de outras tuplas, mas nomear cada campo seria verboso.
+
+<br/>
+
+## Unit-Like Structs (Structs sem Campos)
+
+Structs sem nenhum campo, similares a `()` (unit type):
+
+```rust
+struct AlwaysEqual;
+
+fn main() {
+    let subject = AlwaysEqual;
+}
+```
+
+**Quando usar:** Quando você precisa implementar um trait em algum tipo mas não tem dados para armazenar. Veremos mais sobre traits no futuro.
+
+<br/>
+
+## Ownership de Dados em Structs
+
+Na struct `User`, usamos `String` em vez de `&str` propositalmente:
+
+```rust
+struct User {
+    active: bool,
+    username: String,  // String, não &str
+    email: String,     // String, não &str
+    sign_in_count: u64,
+}
+```
+
+**Por quê?** Queremos que cada instância seja **dona** de todos os seus dados, e que os dados sejam válidos enquanto a struct existir.
+
+**Usando referências (requer lifetimes):**
+```rust
+struct User {
+    active: bool,
+    username: &str,  // ERRO! falta lifetime
+    email: &str,     // ERRO! falta lifetime
+    sign_in_count: u64,
+}
+```
+
+O compilador exigirá **lifetime specifiers** para garantir que os dados referenciados vivam pelo menos tanto quanto a struct. Isso será coberto em capítulos futuros.
+
+<br/>
+
+# Exemplo Prático: Programa com Structs
+
+## Evolução do Código
+
+### Versão 1: Variáveis separadas
+```rust
+fn main() {
+    let width1 = 30;
+    let height1 = 50;
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(width1, height1)
+    );
+}
+
+fn area(width: u32, height: u32) -> u32 {
+    width * height
+}
+```
+
+**Problema:** Não está claro que width e height estão relacionados.
+
+### Versão 2: Com tupla
+```rust
+fn main() {
+    let rect1 = (30, 50);
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(rect1)
+    );
+}
+
+fn area(dimensions: (u32, u32)) -> u32 {
+    dimensions.0 * dimensions.1
+}
+```
+
+**Problema:** Tuplas não nomeiam seus elementos. `dimensions.0` é width ou height?
+
+### Versão 3: Com struct (recomendado)
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(&rect1)
+    );
+}
+
+fn area(rectangle: &Rectangle) -> u32 {
+    rectangle.width * rectangle.height
+}
+```
+
+**Vantagens:**
+- Campos têm nomes descritivos
+- Função recebe um parâmetro (não dois separados)
+- Usamos `&Rectangle` para emprestar (não tomar ownership)
+- Código é claro e autodocumentado
+
+<br/>
+
+## Derived Traits: Adicionando Funcionalidade
+
+### O Trait Debug
+
+Para imprimir structs durante debugging, derive o trait `Debug`:
+
+**Sem Debug (erro):**
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle { width: 30, height: 50 };
+    println!("rect1 is {rect1}"); // ERRO! Rectangle não implementa Display
+}
+```
+
+**Com Debug:**
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle { width: 30, height: 50 };
+    println!("rect1 is {rect1:?}");   // formato compacto
+    println!("rect1 is {rect1:#?}");  // formato pretty-print
+}
+```
+
+**Saída com `:?`:**
+```
+rect1 is Rectangle { width: 30, height: 50 }
+```
+
+**Saída com `:#?`:**
+```
+rect1 is Rectangle {
+    width: 30,
+    height: 50,
+}
+```
+
+### A Macro dbg!
+
+Alternativa ao `println!` para debugging:
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let scale = 2;
+    let rect1 = Rectangle {
+        width: dbg!(30 * scale),  // imprime e retorna o valor
+        height: 50,
+    };
+    dbg!(&rect1);  // use & para não mover ownership
+}
+```
+
+**Saída:**
+```
+[src/main.rs:10:16] 30 * scale = 60
+[src/main.rs:14:5] &rect1 = Rectangle {
+    width: 60,
+    height: 50,
+}
+```
+
+**Diferenças de println!:**
+- `dbg!` imprime para **stderr** (não stdout)
+- Mostra **arquivo e linha** onde foi chamado
+- **Retorna ownership** do valor (por isso `&rect1` para não mover)
+
+<br/>
+
+# Métodos (Method Syntax)
+
+Métodos são similares a funções, mas definidos **dentro do contexto** de uma struct (ou enum/trait). O primeiro parâmetro é sempre `self`.
+
+## Definindo Métodos
+
+Use um bloco `impl` (implementation):
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        rect1.area()  // chamada de método
+    );
+}
+```
+
+**Explicação:**
+- `impl Rectangle { }` - tudo dentro é associado ao tipo `Rectangle`
+- `&self` é atalho para `self: &Self`
+- `Self` é alias para o tipo do bloco impl (neste caso, `Rectangle`)
+
+### Tipos de self
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 { }        // empresta imutavelmente (mais comum)
+    fn resize(&mut self) { }          // empresta mutavelmente
+    fn consume(self) { }              // toma ownership (raro)
+}
+```
+
+**Quando usar cada um:**
+- `&self` - apenas lê os dados
+- `&mut self` - precisa modificar a instância
+- `self` - transforma a instância em algo diferente (previne uso posterior)
+
+<br/>
+
+## Método com Mesmo Nome do Campo
+
+Você pode ter um método com o mesmo nome de um campo:
+
+```rust
+impl Rectangle {
+    fn width(&self) -> bool {
+        self.width > 0
+    }
+}
+
+fn main() {
+    let rect1 = Rectangle { width: 30, height: 50 };
+
+    if rect1.width() {        // método (com parênteses)
+        println!("Width is: {}", rect1.width);  // campo (sem parênteses)
+    }
+}
+```
+
+**Getters:** Métodos que apenas retornam o valor do campo são chamados de getters. Rust não os cria automaticamente como algumas linguagens.
+
+<br/>
+
+## Automatic Referencing and Dereferencing
+
+Diferente de C/C++, Rust não tem operador `->`. Ao chamar métodos, Rust automaticamente adiciona `&`, `&mut`, ou `*`:
+
+```rust
+p1.distance(&p2);
+// é equivalente a:
+(&p1).distance(&p2);
+```
+
+Isso funciona porque métodos têm um receptor claro (`self`), então Rust sabe se o método lê (`&self`), modifica (`&mut self`), ou consome (`self`).
+
+<br/>
+
+## Métodos com Mais Parâmetros
+
+Métodos podem ter parâmetros além de `self`:
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+fn main() {
+    let rect1 = Rectangle { width: 30, height: 50 };
+    let rect2 = Rectangle { width: 10, height: 40 };
+    let rect3 = Rectangle { width: 60, height: 45 };
+
+    println!("Can rect1 hold rect2? {}", rect1.can_hold(&rect2)); // true
+    println!("Can rect1 hold rect3? {}", rect1.can_hold(&rect3)); // false
+}
+```
+
+<br/>
+
+## Associated Functions (Funções Associadas)
+
+Funções dentro de `impl` que **não** têm `self` como primeiro parâmetro:
+
+```rust
+impl Rectangle {
+    fn square(size: u32) -> Self {
+        Self {
+            width: size,
+            height: size,
+        }
+    }
+}
+
+fn main() {
+    let sq = Rectangle::square(3);  // chamada com ::
+}
+```
+
+**Características:**
+- Não são métodos (não operam em uma instância)
+- Frequentemente usadas como **construtores**
+- Chamadas com `::` (ex: `String::from`)
+- `Self` é alias para o tipo do bloco impl
+
+<br/>
+
+## Múltiplos Blocos impl
+
+Uma struct pode ter vários blocos `impl`:
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+
+impl Rectangle {
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+```
+
+Não há razão prática para separar aqui, mas é sintaxe válida. Será útil quando trabalharmos com generics e traits.
+
+<br/>
+
+## Resumo de Structs
+
+- Structs permitem criar tipos personalizados significativos para seu domínio
+- Mantêm dados relacionados conectados e nomeados
+- Blocos `impl` definem funções associadas ao tipo
+- **Métodos** são funções associadas que recebem `self` e especificam comportamento de instâncias
+- **Funções associadas** (sem `self`) são frequentemente usadas como construtores
