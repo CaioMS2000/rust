@@ -1373,3 +1373,492 @@ Não há razão prática para separar aqui, mas é sintaxe válida. Será útil 
 - Blocos `impl` definem funções associadas ao tipo
 - **Métodos** são funções associadas que recebem `self` e especificam comportamento de instâncias
 - **Funções associadas** (sem `self`) são frequentemente usadas como construtores
+
+<br/>
+
+# Enums e Pattern Matching
+
+Enums permitem definir um tipo enumerando suas possíveis **variantes**. São úteis quando um valor pode ser **um de um conjunto possível** de valores.
+
+## Definindo um Enum
+
+Onde structs agrupam campos e dados relacionados, enums dizem que um valor é **um de um conjunto possível** de valores:
+
+```rust
+enum IpAddrKind {
+    V4,
+    V6,
+}
+```
+
+`IpAddrKind` agora é um tipo de dado personalizado que podemos usar em nosso código.
+
+<br/>
+
+## Valores de Enum
+
+Criando instâncias das variantes:
+
+```rust
+let four = IpAddrKind::V4;
+let six = IpAddrKind::V6;
+```
+
+**Namespace:** As variantes são namespaced sob o identificador do enum. Usamos `::` para separar.
+
+Ambos `IpAddrKind::V4` e `IpAddrKind::V6` são do **mesmo tipo**: `IpAddrKind`. Isso permite criar funções que aceitam qualquer variante:
+
+```rust
+fn route(ip_kind: IpAddrKind) {}
+
+route(IpAddrKind::V4);
+route(IpAddrKind::V6);
+```
+
+<br/>
+
+## Enum com Dados Associados
+
+### Problema: Enum + Struct separados
+
+```rust
+enum IpAddrKind {
+    V4,
+    V6,
+}
+
+struct IpAddr {
+    kind: IpAddrKind,
+    address: String,
+}
+
+let home = IpAddr {
+    kind: IpAddrKind::V4,
+    address: String::from("127.0.0.1"),
+};
+
+let loopback = IpAddr {
+    kind: IpAddrKind::V6,
+    address: String::from("::1"),
+};
+```
+
+### Solução: Dados diretamente nas variantes
+
+Podemos colocar dados **diretamente** em cada variante do enum:
+
+```rust
+enum IpAddr {
+    V4(String),
+    V6(String),
+}
+
+let home = IpAddr::V4(String::from("127.0.0.1"));
+let loopback = IpAddr::V6(String::from("::1"));
+```
+
+**Vantagem:** O nome de cada variante se torna uma **função construtora**. `IpAddr::V4()` é uma função que recebe `String` e retorna uma instância de `IpAddr`.
+
+### Variantes com tipos diferentes
+
+Cada variante pode ter **tipos e quantidades diferentes** de dados associados:
+
+```rust
+enum IpAddr {
+    V4(u8, u8, u8, u8),
+    V6(String),
+}
+
+let home = IpAddr::V4(127, 0, 0, 1);
+let loopback = IpAddr::V6(String::from("::1"));
+```
+
+**Nota:** Isso não seria possível com uma struct comum!
+
+### Exemplo com múltiplos tipos
+
+```rust
+enum Message {
+    Quit,                       // sem dados associados
+    Move { x: i32, y: i32 },    // campos nomeados (como struct)
+    Write(String),              // uma String
+    ChangeColor(i32, i32, i32), // três i32
+}
+```
+
+Esse enum é equivalente a definir 4 structs diferentes, mas todas as variantes são agrupadas sob o tipo `Message`.
+
+<br/>
+
+## Métodos em Enums
+
+Assim como structs, enums podem ter métodos definidos com `impl`:
+
+```rust
+impl Message {
+    fn call(&self) {
+        // corpo do método
+    }
+}
+
+let m = Message::Write(String::from("hello"));
+m.call();
+```
+
+<br/>
+
+# O Enum Option<T>
+
+`Option` é um enum da biblioteca padrão que codifica o cenário muito comum de um valor poder ser **algo ou nada**.
+
+## Por que Rust não tem Null?
+
+Em muitas linguagens, variáveis podem estar em dois estados: null ou não-null. O problema é que se você tentar usar um valor null como não-null, terá um erro.
+
+**Citação de Tony Hoare (inventor do null):**
+> "Eu chamo isso de meu erro de um bilhão de dólares... Isso levou a inúmeros erros, vulnerabilidades e falhas de sistema."
+
+Rust **não tem null**, mas tem um enum que codifica o conceito de presença ou ausência de valor:
+
+```rust
+enum Option<T> {
+    None,
+    Some(T),
+}
+```
+
+## Usando Option<T>
+
+`Option<T>` está incluído no prelude - você pode usar `Some` e `None` diretamente:
+
+```rust
+let some_number = Some(5);           // Option<i32>
+let some_char = Some('e');           // Option<char>
+let absent_number: Option<i32> = None;  // precisa anotar o tipo
+```
+
+**Por que `None` precisa de anotação?** O compilador não consegue inferir qual tipo o `Some` teria olhando apenas para `None`.
+
+<br/>
+
+## Por que Option<T> é melhor que Null?
+
+`Option<T>` e `T` são **tipos diferentes**. O compilador não permite usar `Option<T>` como se fosse um valor válido:
+
+```rust
+let x: i8 = 5;
+let y: Option<i8> = Some(5);
+
+let sum = x + y; // ERRO! não pode somar i8 com Option<i8>
+```
+
+**Erro do compilador:**
+```
+error[E0277]: cannot add `Option<i8>` to `i8`
+```
+
+**Benefício:** Você precisa **explicitamente** converter `Option<T>` para `T` antes de usar. Isso força você a lidar com o caso `None`, eliminando o risco de assumir que um valor não é null quando ele é.
+
+Para extrair o valor de um `Option<T>`, você usa pattern matching com `match` ou outros métodos do tipo `Option<T>`.
+
+<br/>
+
+# A Construção match
+
+`match` é uma construção de controle de fluxo extremamente poderosa que compara um valor contra uma série de **patterns** e executa código baseado em qual pattern corresponde.
+
+```rust
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter,
+}
+
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter => 25,
+    }
+}
+```
+
+## Diferença de if
+
+- `if`: a condição precisa avaliar para um **booleano**
+- `match`: pode ser **qualquer tipo**
+
+## Anatomia de um match
+
+```rust
+match valor {
+    pattern1 => código1,
+    pattern2 => código2,
+    pattern3 => {
+        // múltiplas linhas
+        código3
+    }
+}
+```
+
+- Cada **arm** tem um pattern e código separados por `=>`
+- Arms são separados por vírgula
+- O valor do match é o valor da expressão do arm que corresponde
+- Para múltiplas linhas, use `{}` (vírgula após o bloco é opcional)
+
+```rust
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => {
+            println!("Lucky penny!");
+            1
+        }
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter => 25,
+    }
+}
+```
+
+<br/>
+
+## Patterns que Vinculam a Valores
+
+Arms de match podem **vincular** às partes dos valores que correspondem ao pattern:
+
+```rust
+#[derive(Debug)]
+enum UsState {
+    Alabama,
+    Alaska,
+    // ...
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter(UsState),
+}
+
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter(state) => {
+            println!("State quarter from {state:?}!");
+            25
+        }
+    }
+}
+```
+
+Quando `Coin::Quarter(UsState::Alaska)` é passado, `state` é vinculado ao valor `UsState::Alaska`.
+
+<br/>
+
+## Matching com Option<T>
+
+```rust
+fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        None => None,
+        Some(i) => Some(i + 1),
+    }
+}
+
+let five = Some(5);
+let six = plus_one(five);   // Some(6)
+let none = plus_one(None);  // None
+```
+
+**Como funciona:**
+1. `plus_one(Some(5))`: o valor não corresponde a `None`, mas corresponde a `Some(i)` onde `i` é vinculado a `5`. Retorna `Some(6)`.
+2. `plus_one(None)`: corresponde ao primeiro arm, retorna `None`.
+
+<br/>
+
+## Matches são Exaustivos
+
+O compilador **garante** que todos os casos possíveis sejam tratados:
+
+```rust
+fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        Some(i) => Some(i + 1),
+        // ERRO! falta o caso None
+    }
+}
+```
+
+**Erro do compilador:**
+```
+error[E0004]: non-exhaustive patterns: `None` not covered
+```
+
+Rust sabe exatamente qual pattern você esqueceu! Isso é especialmente útil com `Option<T>` - previne assumir que temos um valor quando podemos ter `None`.
+
+<br/>
+
+## Catch-All Patterns e o Placeholder _
+
+Para tratar alguns valores específicos e ter uma ação padrão para o resto:
+
+### Usando uma variável catch-all
+
+```rust
+let dice_roll = 9;
+match dice_roll {
+    3 => add_fancy_hat(),
+    7 => remove_fancy_hat(),
+    other => move_player(other),  // usa o valor
+}
+```
+
+O pattern `other` corresponde a qualquer valor e o vincula à variável `other`.
+
+**Importante:** O arm catch-all deve vir **por último** - patterns são avaliados em ordem!
+
+### Usando _ (ignorando o valor)
+
+Se você não precisa usar o valor:
+
+```rust
+let dice_roll = 9;
+match dice_roll {
+    3 => add_fancy_hat(),
+    7 => remove_fancy_hat(),
+    _ => reroll(),  // não usa o valor
+}
+```
+
+`_` corresponde a qualquer valor mas **não vincula** a ele. Rust não avisa sobre variável não usada.
+
+### Não fazendo nada
+
+Para não fazer nada nos outros casos, use a tupla vazia (unit):
+
+```rust
+let dice_roll = 9;
+match dice_roll {
+    3 => add_fancy_hat(),
+    7 => remove_fancy_hat(),
+    _ => (),  // não faz nada
+}
+```
+
+<br/>
+
+# Controle de Fluxo Conciso com if let e let else
+
+## if let
+
+`if let` é syntax sugar para um `match` que trata apenas um pattern e ignora o resto:
+
+### Com match (verboso)
+
+```rust
+let config_max = Some(3u8);
+match config_max {
+    Some(max) => println!("The maximum is configured to be {max}"),
+    _ => (),
+}
+```
+
+### Com if let (conciso)
+
+```rust
+let config_max = Some(3u8);
+if let Some(max) = config_max {
+    println!("The maximum is configured to be {max}");
+}
+```
+
+**Sintaxe:** `if let pattern = expression { }`
+
+**Trade-off:** `if let` é menos verboso, mas você perde a **verificação de exaustividade** do `match`. Escolha baseado na situação.
+
+## if let com else
+
+Você pode incluir um `else` que funciona como o `_` no match:
+
+```rust
+let mut count = 0;
+match coin {
+    Coin::Quarter(state) => println!("State quarter from {state:?}!"),
+    _ => count += 1,
+}
+```
+
+É equivalente a:
+
+```rust
+let mut count = 0;
+if let Coin::Quarter(state) = coin {
+    println!("State quarter from {state:?}!");
+} else {
+    count += 1;
+}
+```
+
+<br/>
+
+## let...else (Staying on the Happy Path)
+
+Para situações onde você quer extrair um valor ou retornar cedo da função:
+
+### Com if let (menos claro)
+
+```rust
+fn describe_state_quarter(coin: Coin) -> Option<String> {
+    let state = if let Coin::Quarter(state) = coin {
+        state
+    } else {
+        return None;
+    };
+
+    if state.existed_in(1900) {
+        Some(format!("{state:?} is pretty old, for America!"))
+    } else {
+        Some(format!("{state:?} is relatively new."))
+    }
+}
+```
+
+### Com let...else (mais claro)
+
+```rust
+fn describe_state_quarter(coin: Coin) -> Option<String> {
+    let Coin::Quarter(state) = coin else {
+        return None;
+    };
+
+    if state.existed_in(1900) {
+        Some(format!("{state:?} is pretty old, for America!"))
+    } else {
+        Some(format!("{state:?} is relatively new."))
+    }
+}
+```
+
+**Sintaxe:** `let pattern = expression else { /* deve retornar/divergir */ };`
+
+**Características:**
+- Se o pattern corresponde, vincula o valor no escopo externo
+- Se não corresponde, executa o bloco `else` que **deve** retornar da função (ou divergir)
+- Mantém o código no "caminho feliz" sem aninhamento excessivo
+
+<br/>
+
+## Resumo de Enums e Pattern Matching
+
+- **Enums** criam tipos personalizados que podem ser uma de várias variantes
+- Variantes podem ter **dados associados** de tipos diferentes
+- `Option<T>` codifica presença ou ausência de valor, prevenindo erros de null
+- **match** compara valores contra patterns e garante exaustividade
+- **if let** é syntax sugar para match de um único pattern
+- **let...else** extrai valores ou retorna cedo, mantendo código no "caminho feliz"
+- O compilador garante que todos os casos sejam tratados, prevenindo bugs

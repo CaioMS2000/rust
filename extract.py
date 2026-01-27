@@ -4,8 +4,8 @@ import re
 
 file_name = 'The Rust Programming Language.pdf' # está na raiz do projeto
 output_file='output.txt'
-begin_str='Using Structs to Structure Related Data'
-end_str="But structs aren’t the only way you can create custom types: let’s turn to Rust’s enum feature to add another tool to your toolbox."
+begin_str='Enums and Pattern Matching'
+end_str="In order to provide a well-organized API to your users that is straightforward to use and only exposes exactly what your users will need, let’s now turn to Rust’s modules."
 
 def normalize_text(text):
     """
