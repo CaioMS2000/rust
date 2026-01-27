@@ -1,11 +1,11 @@
-import PyPDF2
+from pypdf import PdfReader
 import sys
 import re
 
 file_name = 'The Rust Programming Language.pdf' # está na raiz do projeto
 output_file='output.txt'
-begin_str='Repetition with loops It\'s often useful to execute a block of code more than once.'
-end_str='This code is a bit nicer, isn\'t it?'
+begin_str='Using Structs to Structure Related Data'
+end_str="But structs aren’t the only way you can create custom types: let’s turn to Rust’s enum feature to add another tool to your toolbox."
 
 def normalize_text(text):
     """
@@ -81,7 +81,7 @@ def extract_text_between_markers(pdf_path, start_marker, end_marker):
     """
     try:
         with open(pdf_path, 'rb') as pdf_file:
-            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            pdf_reader = PdfReader(pdf_file)
             total_pages = len(pdf_reader.pages)
 
             full_text = ""

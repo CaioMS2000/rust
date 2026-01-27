@@ -411,3 +411,427 @@ println!("LIFTOFF!!!");
 - Mesmo que você saiba exatamente quantas vezes quer repetir, `for` com Range é mais idiomático em Rust
 - É o que a maioria dos Rustaceans usa
 - Código mais limpo e seguro
+
+<br/>
+
+# Ownership (Propriedade)
+
+Ownership é a característica mais única do Rust. Permite que Rust garanta segurança de memória **sem precisar de garbage collector**.
+
+## Regras de Ownership
+
+1. Cada valor em Rust tem um **owner** (dono)
+2. Só pode haver **um owner** por vez
+3. Quando o owner sai de escopo, o valor é **dropped** (liberado)
+
+<br/>
+
+## Stack vs Heap
+
+### Stack
+- Armazena valores na ordem que chegam, remove na ordem inversa (LIFO - last in, first out)
+- Dados devem ter **tamanho fixo e conhecido** em tempo de compilação
+- Operações são **rápidas** (push/pop sempre no topo)
+- Parâmetros de função e variáveis locais ficam na stack
+
+### Heap
+- Menos organizado - você solicita espaço, o alocador encontra um local livre
+- Retorna um **ponteiro** (endereço do local alocado)
+- Dados podem ter **tamanho variável** ou desconhecido em tempo de compilação
+- **Mais lento** que a stack (precisa buscar espaço e seguir ponteiros)
+
+**Importante:** O propósito principal de ownership é gerenciar dados na heap.
+
+<br/>
+
+## Escopo de Variáveis
+
+```rust
+{                      // s não é válido aqui, ainda não foi declarado
+    let s = "hello";   // s é válido daqui em diante
+    // faz algo com s
+}                      // escopo acabou, s não é mais válido
+```
+
+<br/>
+
+## O Tipo String
+
+### String literal (&str)
+```rust
+let s = "hello"; // tipo: &str
+```
+- Imutável
+- Valor hardcoded no binário
+- Tamanho conhecido em compilação
+
+### String (heap)
+```rust
+let s = String::from("hello"); // alocado na heap
+```
+- Mutável (se declarado com `mut`)
+- Tamanho pode mudar em runtime
+- Precisa alocar memória
+
+```rust
+let mut s = String::from("hello");
+s.push_str(", world!"); // append de literal
+println!("{s}"); // hello, world!
+```
+
+<br/>
+
+## Memória e Alocação
+
+Com `String`:
+1. Memória é **solicitada** do alocador em runtime (via `String::from`)
+2. Memória precisa ser **devolvida** quando terminamos de usar
+
+**Em Rust:** A memória é automaticamente liberada quando a variável sai de escopo.
+
+```rust
+{
+    let s = String::from("hello"); // s é válido daqui
+    // faz algo com s
+}                                  // escopo acabou, Rust chama `drop` automaticamente
+```
+
+**Nota:** Em C++, esse padrão é chamado RAII (Resource Acquisition Is Initialization).
+
+<br/>
+
+## Move (Movimentação)
+
+### Com tipos simples (stack)
+```rust
+let x = 5;
+let y = x; // copia o valor, ambos x e y são válidos
+println!("x = {x}, y = {y}"); // OK!
+```
+
+### Com String (heap)
+```rust
+let s1 = String::from("hello");
+let s2 = s1; // s1 foi MOVIDO para s2
+
+// println!("{s1}"); // ERRO! s1 não é mais válido
+println!("{s2}"); // OK!
+```
+
+**O que acontece internamente:**
+- String tem 3 partes na stack: ponteiro, length, capacity
+- Quando `s2 = s1`, apenas esses dados da stack são copiados (não o conteúdo na heap)
+- Para evitar double free, Rust **invalida** s1
+
+**Isso é chamado de "move"**, não shallow copy.
+
+### Reatribuição também libera memória
+```rust
+let mut s = String::from("hello");
+s = String::from("ahoy"); // "hello" é liberado imediatamente
+println!("{s}, world!"); // ahoy, world!
+```
+
+<br/>
+
+## Clone (Cópia Profunda)
+
+Para copiar os dados da heap também, use `clone`:
+
+```rust
+let s1 = String::from("hello");
+let s2 = s1.clone(); // copia tudo, incluindo dados na heap
+
+println!("s1 = {s1}, s2 = {s2}"); // OK! ambos são válidos
+```
+
+**Atenção:** `clone` pode ser custoso em performance.
+
+<br/>
+
+## Copy Trait (Dados na Stack)
+
+Tipos que ficam inteiramente na stack implementam o trait `Copy`:
+
+```rust
+let x = 5;
+let y = x;
+println!("x = {x}, y = {y}"); // OK! integers implementam Copy
+```
+
+**Tipos que implementam Copy:**
+- Inteiros: `i32`, `u64`, etc.
+- Booleanos: `bool`
+- Floats: `f32`, `f64`
+- Char: `char`
+- Tuplas (se todos os elementos implementam Copy): `(i32, i32)` ✓, `(i32, String)` ✗
+
+**Regra:** Se um tipo implementa `Drop`, não pode implementar `Copy`.
+
+<br/>
+
+## Ownership e Funções
+
+Passar valores para funções segue as mesmas regras de atribuição (move ou copy):
+
+```rust
+fn main() {
+    let s = String::from("hello");  // s entra em escopo
+    takes_ownership(s);             // s é movido para a função
+                                    // s NÃO é mais válido aqui
+
+    let x = 5;                      // x entra em escopo
+    makes_copy(x);                  // i32 implementa Copy
+                                    // x ainda é válido aqui
+}
+
+fn takes_ownership(some_string: String) {
+    println!("{some_string}");
+} // some_string sai de escopo, `drop` é chamado, memória liberada
+
+fn makes_copy(some_integer: i32) {
+    println!("{some_integer}");
+} // some_integer sai de escopo, nada especial acontece
+```
+
+<br/>
+
+## Retorno de Valores e Ownership
+
+Retornar valores também transfere ownership:
+
+```rust
+fn gives_ownership() -> String {
+    let s = String::from("yours");
+    s  // s é retornado e movido para quem chamou
+}
+
+fn takes_and_gives_back(s: String) -> String {
+    s  // s é retornado e movido para quem chamou
+}
+```
+
+<br/>
+
+# References e Borrowing
+
+Para usar um valor **sem tomar ownership**, use **referências**.
+
+## Referências (&)
+
+```rust
+fn main() {
+    let s1 = String::from("hello");
+    let len = calculate_length(&s1); // passa referência
+    println!("The length of '{s1}' is {len}."); // s1 ainda é válido!
+}
+
+fn calculate_length(s: &String) -> usize { // s é uma referência
+    s.len()
+} // s sai de escopo, mas como não tem ownership, nada é liberado
+```
+
+**Conceito:** Criar uma referência é chamado de **borrowing** (empréstimo).
+
+**Importante:** Referências são imutáveis por padrão:
+```rust
+fn change(s: &String) {
+    // s.push_str(", world"); // ERRO! não pode modificar referência imutável
+}
+```
+
+<br/>
+
+## Referências Mutáveis (&mut)
+
+Para modificar um valor emprestado, use `&mut`:
+
+```rust
+fn main() {
+    let mut s = String::from("hello");
+    change(&mut s);
+    println!("{s}"); // hello, world
+}
+
+fn change(s: &mut String) {
+    s.push_str(", world");
+}
+```
+
+### Restrição: Apenas UMA referência mutável por vez
+
+```rust
+let mut s = String::from("hello");
+let r1 = &mut s;
+// let r2 = &mut s; // ERRO! não pode ter duas referências mutáveis
+
+println!("{r1}");
+```
+
+**Por quê?** Previne **data races** em tempo de compilação.
+
+Data race acontece quando:
+1. Dois ou mais ponteiros acessam os mesmos dados simultaneamente
+2. Pelo menos um está escrevendo
+3. Não há sincronização
+
+### Não pode misturar referências mutáveis e imutáveis
+
+```rust
+let mut s = String::from("hello");
+let r1 = &s;     // OK
+let r2 = &s;     // OK
+// let r3 = &mut s; // ERRO! não pode ter &mut enquanto há &
+
+println!("{r1}, {r2}");
+```
+
+### Escopo de referências (NLL - Non-Lexical Lifetimes)
+
+Referências são válidas até seu **último uso**, não até o fim do bloco:
+
+```rust
+let mut s = String::from("hello");
+let r1 = &s;
+let r2 = &s;
+println!("{r1} and {r2}"); // último uso de r1 e r2
+
+let r3 = &mut s; // OK! r1 e r2 não são mais usados
+println!("{r3}");
+```
+
+<br/>
+
+## Dangling References (Referências Pendentes)
+
+Rust **previne** dangling references em tempo de compilação:
+
+```rust
+fn dangle() -> &String {           // ERRO!
+    let s = String::from("hello");
+    &s                              // retorna referência para s
+}   // s é liberado aqui, referência apontaria para memória inválida
+```
+
+**Solução:** Retorne o valor diretamente (transfere ownership):
+
+```rust
+fn no_dangle() -> String {
+    let s = String::from("hello");
+    s  // ownership é movido para quem chamou
+}
+```
+
+<br/>
+
+## Regras de Referências (Resumo)
+
+1. Em qualquer momento, você pode ter **OU** uma referência mutável **OU** qualquer número de referências imutáveis
+2. Referências devem ser **sempre válidas**
+
+<br/>
+
+# Slices
+
+Slices permitem referenciar uma **sequência contígua** de elementos em uma coleção, sem ter ownership.
+
+## String Slices (&str)
+
+```rust
+let s = String::from("hello world");
+
+let hello = &s[0..5];  // "hello"
+let world = &s[6..11]; // "world"
+```
+
+**Sintaxe de range:**
+```rust
+let s = String::from("hello");
+
+let slice = &s[0..2]; // "he"
+let slice = &s[..2];  // mesmo que acima (início implícito)
+
+let slice = &s[3..5]; // "lo"
+let slice = &s[3..];  // mesmo que acima (fim implícito)
+
+let slice = &s[0..5]; // "hello"
+let slice = &s[..];   // string inteira
+```
+
+**Importante:** Índices devem estar em limites válidos de caracteres UTF-8.
+
+<br/>
+
+## Slices Previnem Bugs
+
+Sem slices (problemático):
+```rust
+fn first_word(s: &String) -> usize {
+    // retorna índice do fim da primeira palavra
+    // ...
+}
+
+let mut s = String::from("hello world");
+let word = first_word(&s); // word = 5
+s.clear();                  // s agora é ""
+// word ainda é 5, mas s está vazia! Bug!
+```
+
+Com slices (seguro):
+```rust
+fn first_word(s: &String) -> &str {
+    let bytes = s.as_bytes();
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return &s[0..i];
+        }
+    }
+    &s[..]
+}
+
+let mut s = String::from("hello world");
+let word = first_word(&s); // word é um slice de s
+// s.clear(); // ERRO! não pode ter &mut enquanto há & (word)
+println!("the first word is: {word}");
+```
+
+<br/>
+
+## String Literals são Slices
+
+```rust
+let s = "Hello, world!"; // tipo: &str
+```
+
+String literals são slices apontando para o binário - por isso são imutáveis.
+
+<br/>
+
+## Parâmetros como &str (Melhor Prática)
+
+Prefira `&str` a `&String` em parâmetros de função:
+
+```rust
+fn first_word(s: &str) -> &str { // aceita &String e &str
+    // ...
+}
+
+let my_string = String::from("hello world");
+let word = first_word(&my_string[..]); // slice de String
+let word = first_word(&my_string);     // &String → &str (deref coercion)
+
+let my_literal = "hello world";
+let word = first_word(&my_literal[..]); // slice de literal
+let word = first_word(my_literal);      // literal já é &str
+```
+
+<br/>
+
+## Slices de Arrays
+
+Slices funcionam com outros tipos também:
+
+```rust
+let a = [1, 2, 3, 4, 5];
+let slice = &a[1..3]; // tipo: &[i32], contém [2, 3]
+```
