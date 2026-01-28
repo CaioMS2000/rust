@@ -391,6 +391,7 @@ class LLMOnlyConverter:
     def convert(self, content: ExtractionResult) -> ConversionResult:
         warnings: list[str] = []
         markdown_parts: list[str] = []
+        total_pages = len(content.pages)
 
         system_prompt = """Você é um conversor de texto para Markdown.
 Converta o texto fornecido para Markdown bem formatado.
@@ -410,6 +411,7 @@ Regras:
             if len(text) > self.chunk_size:
                 chunks = self._split_into_chunks(text)
                 for i, chunk in enumerate(chunks):
+                    print(f"  [LLM] Página {page.page_number}/{total_pages} - chunk {i+1}/{len(chunks)}", end='\r')
                     prompt = f"Converta para Markdown:\n\n{chunk}"
                     try:
                         result = self.llm.generate(prompt, system_prompt)
@@ -417,7 +419,9 @@ Regras:
                     except Exception as e:
                         warnings.append(f"Página {page.page_number}, chunk {i}: erro LLM - {e}")
                         markdown_parts.append(chunk)  # fallback: texto original
+                print()  # nova linha após terminar os chunks da página
             else:
+                print(f"  [LLM] Página {page.page_number}/{total_pages}", end='\r')
                 prompt = f"Converta para Markdown:\n\n{text}"
                 try:
                     result = self.llm.generate(prompt, system_prompt)
@@ -425,6 +429,8 @@ Regras:
                 except Exception as e:
                     warnings.append(f"Página {page.page_number}: erro LLM - {e}")
                     markdown_parts.append(text)
+
+        print()  # nova linha final
 
         markdown = "\n\n".join(markdown_parts)
         confidence = 0.7 if not warnings else 0.5
