@@ -4,3 +4,4 @@
 *.py
 !book_page.txt
 !extract.py
+!pdf_to_markdown.py
