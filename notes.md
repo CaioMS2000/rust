@@ -1862,3 +1862,391 @@ fn describe_state_quarter(coin: Coin) -> Option<String> {
 - **if let** é syntax sugar para match de um único pattern
 - **let...else** extrai valores ou retorna cedo, mantendo código no "caminho feliz"
 - O compilador garante que todos os casos sejam tratados, prevenindo bugs
+
+<br/>
+
+# Tratamento de Erros
+
+Rust agrupa erros em duas categorias: **recuperáveis** e **irrecuperáveis**.
+
+- **Erros recuperáveis** (ex: arquivo não encontrado) - queremos reportar ao usuário e tentar novamente
+- **Erros irrecuperáveis** (ex: acesso fora dos limites de um array) - são sintomas de bugs, queremos parar o programa
+
+Rust não tem exceções. Em vez disso, usa:
+- `Result<T, E>` para erros recuperáveis
+- `panic!` para erros irrecuperáveis
+
+<br/>
+
+## Erros Irrecuperáveis com panic!
+
+A macro `panic!` para o programa quando algo dá muito errado.
+
+### Formas de causar panic
+
+1. Ação que causa panic (ex: acessar índice inválido de array)
+2. Chamar `panic!` explicitamente
+
+```rust
+fn main() {
+    panic!("crash and burn");
+}
+```
+
+**Saída:**
+```
+thread 'main' panicked at src/main.rs:2:5:
+crash and burn
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+
+### Exemplo: Acesso fora dos limites
+
+```rust
+fn main() {
+    let v = vec![1, 2, 3];
+    v[99]; // PANIC! índice 99 não existe
+}
+```
+
+**Por que Rust faz panic aqui?** Em C, acessar além do fim de uma estrutura é comportamento indefinido (buffer overread) - pode ler memória que não pertence à estrutura, causando vulnerabilidades de segurança. Rust protege contra isso parando a execução.
+
+### Unwinding vs Abort
+
+Por padrão, quando ocorre panic:
+1. Rust faz **unwinding** - volta pela stack limpando dados de cada função
+2. Isso dá trabalho
+
+**Alternativa:** Fazer **abort** imediato (sem limpeza, o SO limpa a memória):
+
+```toml
+# Cargo.toml
+[profile.release]
+panic = 'abort'
+```
+
+### Backtrace
+
+Para ver a pilha de chamadas que levou ao panic:
+
+```bash
+RUST_BACKTRACE=1 cargo run
+```
+
+**Como ler:** Comece do topo e leia até ver arquivos que você escreveu - esse é o ponto onde o problema se originou.
+
+**Nota:** Debug symbols devem estar habilitados (padrão em `cargo build` sem `--release`).
+
+<br/>
+
+## Erros Recuperáveis com Result
+
+A maioria dos erros não é grave o suficiente para parar o programa.
+
+### O Enum Result
+
+```rust
+enum Result<T, E> {
+    Ok(T),   // operação bem-sucedida, contém o valor
+    Err(E),  // operação falhou, contém informação do erro
+}
+```
+
+- `T` - tipo do valor em caso de sucesso
+- `E` - tipo do erro em caso de falha
+
+### Tratando Result com match
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let file_result = File::open("hello.txt");
+
+    let file = match file_result {
+        Ok(file) => file,
+        Err(error) => panic!("Problema ao abrir o arquivo: {error:?}"),
+    };
+}
+```
+
+**Nota:** `Result`, `Ok` e `Err` estão no prelude - não precisa de `Result::Ok`.
+
+### Matching em Diferentes Tipos de Erro
+
+Use `error.kind()` para tratar erros específicos:
+
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+
+fn main() {
+    let file = match File::open("hello.txt") {
+        Ok(file) => file,
+        Err(error) => match error.kind() {
+            ErrorKind::NotFound => match File::create("hello.txt") {
+                Ok(fc) => fc,
+                Err(e) => panic!("Problema ao criar arquivo: {e:?}"),
+            },
+            other_error => {
+                panic!("Problema ao abrir arquivo: {other_error:?}");
+            }
+        },
+    };
+}
+```
+
+**Alternativa com closures (mais limpo):**
+
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+
+fn main() {
+    let file = File::open("hello.txt").unwrap_or_else(|error| {
+        if error.kind() == ErrorKind::NotFound {
+            File::create("hello.txt").unwrap_or_else(|error| {
+                panic!("Problema ao criar arquivo: {error:?}");
+            })
+        } else {
+            panic!("Problema ao abrir arquivo: {error:?}");
+        }
+    });
+}
+```
+
+<br/>
+
+## Atalhos: unwrap e expect
+
+### unwrap
+
+Retorna o valor de `Ok` ou chama `panic!`:
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let file = File::open("hello.txt").unwrap();
+}
+```
+
+**Se falhar:**
+```
+thread 'main' panicked at src/main.rs:4:49:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+```
+
+### expect
+
+Como `unwrap`, mas permite mensagem customizada:
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let file = File::open("hello.txt")
+        .expect("hello.txt deveria estar incluído neste projeto");
+}
+```
+
+**Se falhar:**
+```
+thread 'main' panicked at src/main.rs:5:10:
+hello.txt deveria estar incluído neste projeto: Os { code: 2, kind: NotFound, ... }
+```
+
+**Preferência:** Em código de produção, Rustaceans preferem `expect` com mensagens que explicam **por que** a operação deveria sempre ter sucesso.
+
+### Outros métodos úteis
+
+```rust
+let result: Result<i32, &str> = Ok(5);
+
+// unwrap_or - retorna valor padrão se Err
+let value = result.unwrap_or(0);
+
+// unwrap_or_else - executa closure se Err
+let value = result.unwrap_or_else(|err| {
+    println!("Erro: {err}");
+    0
+});
+
+// is_ok / is_err - verifica o estado
+if result.is_ok() {
+    println!("Sucesso!");
+}
+```
+
+<br/>
+
+## Propagação de Erros
+
+Em vez de tratar o erro na função, você pode retorná-lo para quem chamou decidir:
+
+### Com match (verboso)
+
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+
+fn read_username_from_file() -> Result<String, io::Error> {
+    let username_file_result = File::open("hello.txt");
+
+    let mut username_file = match username_file_result {
+        Ok(file) => file,
+        Err(e) => return Err(e),
+    };
+
+    let mut username = String::new();
+
+    match username_file.read_to_string(&mut username) {
+        Ok(_) => Ok(username),
+        Err(e) => Err(e),
+    }
+}
+```
+
+### Com o operador ? (conciso)
+
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username_file = File::open("hello.txt")?;
+    let mut username = String::new();
+    username_file.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+
+**Como `?` funciona:**
+- Se `Result` for `Ok`, extrai o valor e continua
+- Se `Result` for `Err`, **retorna imediatamente** o erro da função
+
+### Encadeando com ?
+
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username = String::new();
+    File::open("hello.txt")?.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+
+### Forma mais curta ainda
+
+```rust
+use std::fs;
+use std::io;
+
+fn read_username_from_file() -> Result<String, io::Error> {
+    fs::read_to_string("hello.txt")
+}
+```
+
+### Conversão automática de erros
+
+O operador `?` chama `From::from` automaticamente para converter tipos de erro. Se sua função retorna `OurError` e você implementa `From<io::Error> for OurError`, o `?` converte automaticamente.
+
+<br/>
+
+## Onde o Operador ? Pode Ser Usado
+
+O `?` só pode ser usado em funções que retornam tipo compatível:
+
+**Erro - main retorna ():**
+```rust
+use std::fs::File;
+
+fn main() {
+    let file = File::open("hello.txt")?; // ERRO!
+}
+```
+
+**Solução - main retornando Result:**
+```rust
+use std::error::Error;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let file = File::open("hello.txt")?;
+    Ok(())
+}
+```
+
+`Box<dyn Error>` significa "qualquer tipo de erro" - permite que `main` retorne diferentes tipos de erro.
+
+**Código de saída:**
+- `main` retorna `Ok(())` → programa sai com código 0
+- `main` retorna `Err` → programa sai com código não-zero
+
+### ? com Option
+
+O `?` também funciona com `Option`:
+
+```rust
+fn last_char_of_first_line(text: &str) -> Option<char> {
+    text.lines().next()?.chars().last()
+}
+```
+
+- Se `next()` retorna `None`, `?` retorna `None` da função
+- Se retorna `Some`, extrai o valor e continua
+
+**Importante:** Não pode misturar! `?` em `Result` requer função que retorna `Result`, `?` em `Option` requer função que retorna `Option`. Use `.ok()` ou `.ok_or()` para converter.
+
+<br/>
+
+## Quando Usar panic! vs Result
+
+### Use panic! quando:
+
+1. **Exemplos e protótipos** - `unwrap`/`expect` são placeholders para tratamento real
+2. **Testes** - se um método falha no teste, queremos que o teste falhe
+3. **Você sabe mais que o compilador:**
+   ```rust
+   use std::net::IpAddr;
+
+   let home: IpAddr = "127.0.0.1"
+       .parse()
+       .expect("IP hardcoded deveria ser válido");
+   ```
+4. **Estado inválido/corrompido** - quando uma suposição, garantia ou invariante foi violada:
+   - O estado é inesperado (não algo comum como input de usuário errado)
+   - Seu código depende de não estar nesse estado
+   - Não há como codificar essa informação nos tipos
+5. **Código externo retorna estado inválido** que você não pode corrigir
+6. **Segurança** - continuar poderia ser inseguro ou prejudicial
+
+### Use Result quando:
+
+1. **Falha é esperada** - ex: parser com dados malformados, HTTP rate limit
+2. **Quem chamou pode decidir** o que fazer com o erro
+3. **É a escolha padrão** ao definir funções que podem falhar
+
+### Use o sistema de tipos
+
+Em vez de verificações em runtime, use tipos que garantem validade:
+- `u32` em vez de `i32` quando valor não pode ser negativo
+- Tipos em vez de `Option` quando valor é obrigatório
+- Tipos customizados que validam no construtor
+
+<br/>
+
+## Result vs Option
+
+| Aspecto | Option<T> | Result<T, E> |
+|---------|-----------|--------------|
+| Propósito | Presença ou ausência de valor | Sucesso ou falha com informação |
+| Variantes | Some(T), None | Ok(T), Err(E) |
+| Uso típico | Valores opcionais | Operações que podem falhar |
+| Informação de erro | Não | Sim |
+
+**Quando usar cada um:**
+- `Option` - quando a ausência de valor é uma possibilidade normal (ex: buscar em uma lista)
+- `Result` - quando algo pode dar errado e você quer saber o porquê (ex: I/O, parsing)
