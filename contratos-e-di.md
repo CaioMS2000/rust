@@ -2,7 +2,7 @@
 
 ## O Problema Central
 
-Em linguagens como TypeScript, toda variável é implicitamente um ponteiro para a heap. Isso permite escrever:
+Em linguagens como TypeScript, objetos e instâncias de classes são implicitamente referências para a heap. Isso permite escrever:
 
 ```typescript
 let operation: MathOperation = new Addition();
@@ -216,3 +216,87 @@ let calc = Calculator::new(Addition);
 - **Tipo fixo, mas quer esconder na assinatura?** -> `impl Trait`
 - **Máxima performance sem polimorfismo runtime?** -> Generics (`T: Trait`)
 - **Vários donos do mesmo valor?** -> `Rc<dyn Trait>` ou `Arc<dyn Trait>`
+
+---
+
+## Tipagem Explícita vs Inferência
+
+Em Rust, a filosofia é diferente de TypeScript/Java:
+
+- **Assinaturas de função**: tipagem **obrigatória** (parâmetros e retorno)
+- **Variáveis locais**: inferência é **encorajada**
+
+Razões:
+1. Assinaturas são a "API pública" — documentam o contrato
+2. Variáveis locais são "internas" — o compilador já valida tudo
+
+```rust
+// Idiomático - inferência local, tipos explícitos na assinatura
+fn criar_collector() -> impl InputCollector {
+    ConsoleCollector  // tipo inferido aqui
+}
+
+let c = criar_collector();  // tipo inferido, ok
+```
+
+---
+
+## Quando Usar Traits
+
+### Quando trait é overengineering
+
+Se você tem **uma única implementação** e provavelmente sempre terá, trait não adiciona valor.
+
+```rust
+// Isso seria mais simples e suficiente:
+struct ConsoleCollector;
+
+impl ConsoleCollector {
+    fn collect(&self) -> String { ... }
+}
+```
+
+### Quando trait realmente brilha
+
+| Situação | Usar trait? |
+|----------|-------------|
+| Uma implementação só, sem testes | Não |
+| Quer mockar para testes | Sim |
+| Múltiplas implementações reais | Sim |
+| Código de biblioteca | Sim |
+| Estender tipos externos | Sim |
+
+### Exemplos práticos
+
+**1. Múltiplas implementações concretas**
+```rust
+trait InputCollector {
+    fn collect(&self) -> String;
+}
+
+struct ConsoleCollector;  // produção
+struct MockCollector;     // testes
+struct FileCollector;     // lê de arquivo
+```
+
+**2. Código de biblioteca / API pública**
+```rust
+pub trait Storage {
+    fn save(&self, data: &[u8]) -> Result<()>;
+    fn load(&self, key: &str) -> Result<Vec<u8>>;
+}
+// Usuários implementam: S3Storage, LocalStorage, RedisStorage...
+```
+
+**3. Extensão de tipos que você não controla**
+```rust
+trait Doubler {
+    fn double(&self) -> Self;
+}
+
+impl Doubler for i32 {
+    fn double(&self) -> Self { self * 2 }
+}
+
+let x = 5.double();  // agora i32 tem .double()!
+```
